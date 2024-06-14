@@ -38,13 +38,8 @@ class App(tk.Tk):
         style.configure(
             "TCombobox",
             fieldbackground="gray25",
-            foreground="white",
+            foreground="black",
             background="gray25",
-        )
-        style.map(
-            "TCombobox",
-            foreground=[("active", "white"), ("!disabled", "white")],
-            background=[("active", "gray25"), ("!disabled", "gray25")],
         )
 
         # Create main frame
@@ -163,6 +158,7 @@ class App(tk.Tk):
             server = self.servers[selected_server]
             output_lines = server.get_output()
 
+            # TODO: Find a way to not need to do this new lines check (probably timestamp lines on api end?)
             output_lines = self.strip("\n".join(output_lines)).split("\n")
             existing_output = self.strip(self.text_display.get("1.0", "end-1c")).split("\n")
             new_lines = [line for line in output_lines if line not in existing_output]
