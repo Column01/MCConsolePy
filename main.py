@@ -1,10 +1,12 @@
 import datetime
 import json
-import threading
+import sys
 import tkinter as tk
 from tkinter import ttk
 
 import requests
+
+from server import Server
 
 
 class App(tk.Tk):
@@ -16,6 +18,8 @@ class App(tk.Tk):
         self._url = self.config.get("url", "127.0.0.1")
         self.port = self.config.get("port", 5000)
         self.url = f"http://{self._url}:{self.port}"
+
+        self.session = requests.Session()
 
         print(f"Loaded settings from config. API URL: {self.url}")
 
@@ -31,6 +35,17 @@ class App(tk.Tk):
         style.configure("TButton", background="gray25", foreground="white")
         style.map("TButton", foreground=[("active", "black")])
         style.configure("TEntry", fieldbackground="gray25", foreground="white")
+        style.configure(
+            "TCombobox",
+            fieldbackground="gray25",
+            foreground="white",
+            background="gray25",
+        )
+        style.map(
+            "TCombobox",
+            foreground=[("active", "white"), ("!disabled", "white")],
+            background=[("active", "gray25"), ("!disabled", "gray25")],
+        )
 
         # Create main frame
         self.main_frame = ttk.Frame(self)
@@ -65,6 +80,14 @@ class App(tk.Tk):
         )
         self.side_panel.pack(fill=tk.BOTH, expand=True)
 
+        # Server selection dropdown
+        self.server_var = tk.StringVar()
+        self.server_dropdown = ttk.Combobox(
+            self.side_panel_frame, textvariable=self.server_var, state="readonly"
+        )
+        self.server_dropdown.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
+        self.server_dropdown.bind("<<ComboboxSelected>>", self.on_server_change)
+
         # Bottom frame
         self.bottom_frame = ttk.Frame(self)
         self.bottom_frame.pack(fill=tk.X, padx=10, pady=5)
@@ -92,19 +115,72 @@ class App(tk.Tk):
                 "API key file not found. Please create api_key.txt with your API key in it."
             )
 
-        # Threads are daemon threads because the requests block,
-        # causing indefinite hanging when trying to close the application
-        # Start the output streaming thread
-        self.stream_stop_event = threading.Event()
-        self.stream_thread = threading.Thread(target=self.stream_output)
-        self.stream_thread.daemon = True  # Set the thread as a daemon thread
-        self.stream_thread.start()
+        # Initialize servers dictionary
+        self.servers = {}
 
-        # Start the player list update thread
-        self.player_list_stop_event = threading.Event()
-        self.player_list_thread = threading.Thread(target=self.update_player_list)
-        self.player_list_thread.daemon = True  # Set the thread as a daemon thread
-        self.player_list_thread.start()
+        # Get the list of running servers
+        self.get_server_list()
+
+    def get_server_list(self):
+        url = f"{self.url}/servers"
+        headers = {"x-api-key": self.api_key} if self.api_key else None
+        try:
+            response = requests.get(url, headers=headers)
+            response.raise_for_status()  # Raise an exception for 4xx or 5xx status codes
+            server_list = response.json().get("servers", [])
+            if server_list:
+                for server_data in server_list:
+                    server_name = server_data["name"]
+                    self.servers[server_name] = Server(self, server_name)
+                self.server_dropdown["values"] = list(self.servers.keys())
+                self.server_dropdown.current(0)  # Select the first server by default
+                self.update_ui()
+            else:
+                print("No servers are running")
+        except requests.exceptions.RequestException as e:
+            print(f"Error occurred while retrieving server list: {e}")
+
+    def on_server_change(self, event):
+        self.clear_output()
+        self.clear_player_list()
+        self.update_ui()
+
+    def clear_output(self):
+        self.text_display.configure(state="normal")
+        self.text_display.delete("1.0", tk.END)
+        self.text_display.configure(state="disabled")
+
+    def clear_player_list(self):
+        self.side_panel.delete(0, tk.END)
+
+    def strip(self, line):
+        ret = line.replace("\r\n", "")
+        return ret
+
+    def update_ui(self):
+        selected_server = self.server_var.get()
+        if selected_server:
+            server = self.servers[selected_server]
+            output_lines = server.get_output()
+
+            output_lines = self.strip("\n".join(output_lines)).split("\n")
+            existing_output = self.strip(self.text_display.get("1.0", "end-1c")).split("\n")
+            new_lines = [line for line in output_lines if line not in existing_output]
+
+            if new_lines:
+                self.text_display.delete(0, tk.END)
+                self.text_display.configure(state="normal")  # Enable editing
+                for line in output_lines:
+                    self.text_display.insert(tk.END, line + "\n")
+                self.text_display.configure(state="disabled")  # Disable editing
+                self.text_display.see(tk.END)  # Scroll to the end
+
+            player_list = server.get_player_list()
+            self.side_panel.delete(0, tk.END)  # Clear the existing player list
+            for player_name in player_list:
+                self.side_panel.insert(tk.END, player_name)
+
+        self.after(1000, self.update_ui)  # Schedule the next update after 1 second
 
     def submit_text(self):
         text = self.entry.get()
@@ -122,7 +198,7 @@ class App(tk.Tk):
             # Send HTTP POST request with the input text as a query parameter and API key
             url = f"{self.url}/input"
             headers = {"x-api-key": self.api_key} if self.api_key else None
-            params = {"command": text}
+            params = {"command": text, "server_name": self.server_var.get()}
             try:
                 response = requests.post(url, headers=headers, params=params)
                 response.raise_for_status()  # Raise an exception for 4xx or 5xx status codes
@@ -130,66 +206,11 @@ class App(tk.Tk):
             except requests.exceptions.RequestException as e:
                 print(f"Error occurred while sending input: {e}")
 
-    def stream_output(self):
-        url = f"{self.url}/output"
-        headers = {"x-api-key": self.api_key} if self.api_key else None
-        try:
-            with requests.get(url, headers=headers, stream=True) as response:
-                buffer = ""
-                for chunk in response.iter_content(chunk_size=1):
-                    if self.stream_stop_event.is_set():
-                        break
-                    if chunk:
-                        buffer += chunk.decode("utf-8")
-                        if "\n" in buffer:
-                            lines = buffer.split("\n")
-                            buffer = lines[
-                                -1
-                            ]  # Keep the last incomplete line in the buffer
-                            for line in lines[:-1]:
-                                try:
-                                    json_data = json.loads(line)
-                                    output_line = json_data.get("line", "")
-                                    self.text_display.configure(
-                                        state="normal"
-                                    )  # Enable editing
-                                    self.text_display.insert(tk.END, output_line + "\n")
-                                    self.text_display.configure(
-                                        state="disabled"
-                                    )  # Disable editing
-                                    self.text_display.see(tk.END)  # Scroll to the end
-                                except json.JSONDecodeError:
-                                    print(f"Error decoding JSON: {line}")
-        except requests.exceptions.RequestException as e:
-            if not self.stream_stop_event.is_set():
-                print(f"Error occurred during streaming: {e}")
-
-    def update_player_list(self):
-        url = f"{self.url}/players"
-        headers = {"x-api-key": self.api_key} if self.api_key else None
-        while not self.player_list_stop_event.is_set():
-            try:
-                response = requests.get(url, headers=headers)
-                response.raise_for_status()  # Raise an exception for 4xx or 5xx status codes
-                json_data = response.json()
-                player_list = json_data.get("players", [])
-                self.side_panel.delete(0, tk.END)  # Clear the existing player list
-                for player_name in player_list:
-                    self.side_panel.insert(tk.END, player_name)
-            except requests.exceptions.RequestException as e:
-                print(f"Error occurred while retrieving player list: {e}")
-
-            # Wait for 3 seconds before the next update
-            self.player_list_stop_event.wait(3)
-
     def on_closing(self):
-        # Lazily try to join threads and just exit if we can't, they're daemon threads anyways
-        self.stream_stop_event.set()
-        self.stream_thread.join(timeout=1)
-        self.player_list_stop_event.set()
-        self.player_list_thread.join(timeout=1)
+        for server in self.servers.values():
+            server.stop()
         self.destroy()
-        exit()
+        sys.exit(0)
 
 
 if __name__ == "__main__":
