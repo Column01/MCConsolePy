@@ -2,9 +2,9 @@
 
 MCConsolePy is a Tkinter app designed to demonstrate the functionality of the MCConsoleAPI project. It provides a graphical user interface to interact with the MCConsoleAPI.
 
-NOTE: This project is outdated pending multi-server support in MCConsoleAPI.
-
-If you want to use it, install an [old version of MCConsoleAPI](https://github.com/Column01/MCConsoleAPI/tree/81cd101766e227d5e8afe1d9ae57dd4a90772771) before I started adding multi-server support
+> [!NOTE]
+> This project is a WIP and lacks some QOL features that you may want to see added. For example, the servers list is only populated at application startup. Use at your own risk and manage your expectations.
+> This app exists really just to test the backend, I envisioned people would make frontends in other languages that will be better than anything I could ever make!
 
 ## Prerequisites
 
