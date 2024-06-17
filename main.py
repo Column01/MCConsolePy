@@ -1,6 +1,6 @@
 import datetime
 import json
-import sys
+import os
 import tkinter as tk
 from tkinter import ttk
 
@@ -112,6 +112,8 @@ class App(tk.Tk):
 
         # Initialize servers dictionary
         self.servers = {}
+        # The previous line put into the output
+        self.prev_line = None
 
         # Get the list of running servers
         self.get_server_list()
@@ -144,6 +146,7 @@ class App(tk.Tk):
         self.text_display.configure(state="normal")
         self.text_display.delete("1.0", tk.END)
         self.text_display.configure(state="disabled")
+        self.prev_line = None
 
     def clear_player_list(self):
         self.side_panel.delete(0, tk.END)
@@ -157,19 +160,17 @@ class App(tk.Tk):
         if selected_server:
             server = self.servers[selected_server]
             output_lines = server.get_output()
+            self.text_display.configure(state="normal")  # Enable editing
 
-            # TODO: Find a way to not need to do this new lines check (probably timestamp lines on api end?)
-            output_lines = self.strip("\n".join(output_lines)).split("\n")
-            existing_output = self.strip(self.text_display.get("1.0", "end-1c")).split("\n")
-            new_lines = [line for line in output_lines if line not in existing_output]
-
-            if new_lines:
-                self.text_display.delete(0, tk.END)
-                self.text_display.configure(state="normal")  # Enable editing
-                for line in output_lines:
+            for line_data in output_lines:
+                line = line_data["line"]
+                timestamp = line_data["timestamp"]
+                if self.prev_line is None or (line != self.prev_line["line"] and timestamp >= self.prev_line["timestamp"]):
                     self.text_display.insert(tk.END, line + "\n")
-                self.text_display.configure(state="disabled")  # Disable editing
-                self.text_display.see(tk.END)  # Scroll to the end
+                    self.prev_line = line_data
+
+            self.text_display.configure(state="disabled")  # Disable editing
+            self.text_display.see(tk.END)  # Scroll to the end
 
             player_list = server.get_player_list()
             self.side_panel.delete(0, tk.END)  # Clear the existing player list
@@ -185,7 +186,7 @@ class App(tk.Tk):
 
             # Format the input text with timestamp and prefix
             timestamp = datetime.datetime.now().strftime("%H:%M:%S")
-            formatted_text = f"[{timestamp}] [MCConsole] {text}"
+            formatted_text = f"[{timestamp}] [MCConsolePy] {text}"
 
             self.text_display.insert(tk.END, formatted_text + "\n")
             self.text_display.configure(state="disabled")  # Disable editing
@@ -206,7 +207,7 @@ class App(tk.Tk):
         for server in self.servers.values():
             server.stop()
         self.destroy()
-        sys.exit(0)
+        os._exit(0)
 
 
 if __name__ == "__main__":

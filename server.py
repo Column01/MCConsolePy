@@ -41,8 +41,7 @@ class Server:
                             for line in lines[:-1]:
                                 try:
                                     json_data = json.loads(line)
-                                    output_line = json_data.get("line", "")
-                                    self.output_buffer.append(output_line)
+                                    self.output_buffer.append(json_data)
                                 except json.JSONDecodeError:
                                     print(f"Error decoding JSON: {line}")
         except requests.exceptions.RequestException as e:
