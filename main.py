@@ -24,7 +24,7 @@ class App(tk.Tk):
         print(f"Loaded settings from config. API URL: {self.url}")
 
         self.title("MCConsolePy")
-        self.geometry("600x400")
+        self.geometry("800x600")
 
         # Set dark theme
         self.configure(bg="black")
@@ -35,11 +35,11 @@ class App(tk.Tk):
         style.configure("TButton", background="gray25", foreground="white")
         style.map("TButton", foreground=[("active", "black")])
         style.configure("TEntry", fieldbackground="gray25", foreground="white")
-        style.configure(
-            "TCombobox",
-            fieldbackground="gray25",
-            foreground="black",
-            background="gray25",
+        style.configure("Custom.TMenubutton", background="gray25", foreground="white")
+        style.map(
+            "Custom.TMenubutton",
+            background=[("active", "white")],
+            foreground=[("active", "black")],
         )
 
         # Create main frame
@@ -54,15 +54,15 @@ class App(tk.Tk):
             state="disabled",
             bg="black",
             fg="white",
-            insertbackground="white",
+            insertbackground="white"
         )
         self.text_display.pack(
             side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10, pady=10
         )
 
         # Side panel
-        self.side_panel_frame = ttk.Frame(self.main_frame, width=200)
-        self.side_panel_frame.pack(side=tk.RIGHT, fill=tk.Y, padx=10, pady=10)
+        self.side_panel_frame = ttk.Frame(self.main_frame, width=210)
+        self.side_panel_frame.pack(side=tk.RIGHT, fill=tk.Y)
 
         self.side_panel = tk.Listbox(
             self.side_panel_frame,
@@ -72,24 +72,29 @@ class App(tk.Tk):
             fg="white",
             selectbackground="gray25",
             selectforeground="white",
+            font=("Segoe UI", 12)
         )
-        self.side_panel.pack(fill=tk.BOTH, expand=True)
+        self.side_panel.pack(fill=tk.BOTH, padx=10, pady=5, expand=True)
 
         # Server selection dropdown
         self.server_var = tk.StringVar()
-        self.server_dropdown = ttk.Combobox(
-            self.side_panel_frame, textvariable=self.server_var, state="readonly"
+        self.server_dropdown = ttk.OptionMenu(
+            self.side_panel_frame,
+            self.server_var,
+            "No servers running",
+            style="Custom.TMenubutton",
         )
-        self.server_dropdown.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
+        self.server_dropdown.pack(side=tk.TOP, fill=tk.X, padx=10, pady=10)
         self.server_dropdown.bind("<<ComboboxSelected>>", self.on_server_change)
 
         # Bottom frame
         self.bottom_frame = ttk.Frame(self)
-        self.bottom_frame.pack(fill=tk.X, padx=10, pady=5)
+        self.bottom_frame.pack(fill=tk.X)
 
         # Text entry
-        self.entry = ttk.Entry(self.bottom_frame, width=50)
-        self.entry.pack(side=tk.LEFT, fill=tk.X, padx=5, expand=True)
+        self.entry = ttk.Entry(self.bottom_frame, width=70, font=("Segoe UI", 12))  # Increase width and font size
+        self.entry.pack(side=tk.LEFT, fill=tk.X, padx=5, pady=10, expand=True)
+        self.entry.bind("<Return>", self.submit_text)  # Bind Enter key to submit_text method
 
         # Submit button
         self.submit_button = ttk.Button(
@@ -129,8 +134,15 @@ class App(tk.Tk):
                 for server_data in server_list:
                     server_name = server_data["name"]
                     self.servers[server_name] = Server(self, server_name)
-                self.server_dropdown["values"] = list(self.servers.keys())
-                self.server_dropdown.current(0)  # Select the first server by default
+                self.server_dropdown["menu"].delete(0, "end")
+                for server_name in self.servers.keys():
+                    self.server_dropdown["menu"].add_command(
+                        label=server_name,
+                        command=lambda value=server_name: self.server_var.set(value),
+                    )
+                self.server_var.set(
+                    next(iter(self.servers.keys()))
+                )  # Select the first server by default
                 self.update_ui()
             else:
                 print("No servers are running")
@@ -165,7 +177,10 @@ class App(tk.Tk):
             for line_data in output_lines:
                 line = line_data["line"]
                 timestamp = line_data["timestamp"]
-                if self.prev_line is None or (line != self.prev_line["line"] and timestamp >= self.prev_line["timestamp"]):
+                if self.prev_line is None or (
+                    line != self.prev_line["line"]
+                    and timestamp >= self.prev_line["timestamp"]
+                ):
                     self.text_display.insert(tk.END, line + "\n")
                     self.prev_line = line_data
 
@@ -179,7 +194,7 @@ class App(tk.Tk):
 
         self.after(1000, self.update_ui)  # Schedule the next update after 1 second
 
-    def submit_text(self):
+    def submit_text(self, event=None):
         text = self.entry.get()
         if text:
             self.text_display.configure(state="normal")  # Enable editing
