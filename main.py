@@ -142,6 +142,14 @@ class App(tk.Tk):
         self.get_server_list()
 
     def get_server_list(self):
+        # Remove no longer running servers
+        to_remove = [
+            server
+            for server in self.servers.keys()
+            if self.servers[server].stop_event.is_set()
+        ]
+        _ = [self.servers.pop(server, None) for server in to_remove]
+
         url = f"{self.url}/servers"
         headers = {"x-api-key": self.api_key} if self.api_key else None
         try:
@@ -151,7 +159,8 @@ class App(tk.Tk):
             if server_list:
                 for server_data in server_list:
                     server_name = server_data["name"]
-                    self.servers[server_name] = Server(self, server_name)
+                    if server_name not in self.servers:
+                        self.servers[server_name] = Server(self, server_name)
                 self.server_dropdown["menu"].delete(0, "end")
                 for server_name in self.servers.keys():
                     self.server_dropdown["menu"].add_command(
@@ -165,14 +174,6 @@ class App(tk.Tk):
                 print("No servers are running")
         except requests.exceptions.RequestException as e:
             print(f"Error occurred while retrieving server list: {e}")
-
-        # Cleanup to remove no longer running servers
-        to_remove = [
-            server
-            for server in self.servers.keys()
-            if self.servers[server].stop_event.is_set()
-        ]
-        _ = [self.servers.pop(server, None) for server in to_remove]
 
     def on_server_change(self, *args):
         self.clear_output()
@@ -210,6 +211,8 @@ class App(tk.Tk):
                         and timestamp > self.prev_line["timestamp"]
                     ):
                         self.text_display.insert(tk.END, line + "\n")
+                        # Scroll to the end
+                        self.text_display.see(tk.END)
                         self.prev_line = line_data
 
                 self.text_display.configure(state="disabled")  # Disable editing
