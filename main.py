@@ -53,7 +53,9 @@ class App(tk.Tk):
 
         # File menu
         self.file_menu = tk.Menu(self.menu_bar, tearoff=0)
-        self.file_menu.add_command(label="Refresh Servers", command=self.refresh_servers)
+        self.file_menu.add_command(
+            label="Refresh Servers", command=self.refresh_servers
+        )
         self.menu_bar.add_cascade(label="File", menu=self.file_menu)
 
         # Create main frame
@@ -68,7 +70,7 @@ class App(tk.Tk):
             state="disabled",
             bg="black",
             fg="white",
-            insertbackground="white"
+            insertbackground="white",
         )
         self.text_display.pack(
             side=tk.LEFT, fill=tk.BOTH, expand=True, padx=10, pady=10
@@ -86,7 +88,7 @@ class App(tk.Tk):
             fg="white",
             selectbackground="gray25",
             selectforeground="white",
-            font=("Segoe UI", 12)
+            font=("Segoe UI", 12),
         )
         self.side_panel.pack(fill=tk.BOTH, padx=10, pady=5, expand=True)
 
@@ -108,9 +110,14 @@ class App(tk.Tk):
         self.bottom_frame.pack(fill=tk.X)
 
         # Text entry
-        self.entry = ttk.Entry(self.bottom_frame, width=70, font=("Segoe UI", 12))  # Increase width and font size
+        self.entry = ttk.Entry(
+            self.bottom_frame, width=70, font=("Segoe UI", 12)
+        )
         self.entry.pack(side=tk.LEFT, fill=tk.X, padx=5, pady=10, expand=True)
-        self.entry.bind("<Return>", self.submit_text)  # Bind Enter key to submit_text method
+        # Pressing enter submits textbox
+        self.entry.bind(
+            "<Return>", self.submit_text
+        )
 
         # Submit button
         self.submit_button = ttk.Button(
@@ -152,9 +159,7 @@ class App(tk.Tk):
                         command=lambda value=server_name: self.server_var.set(value),
                     )
                 # Select the first server by default
-                self.server_var.set(
-                    next(iter(self.servers.keys()))
-                )
+                self.server_var.set(next(iter(self.servers.keys())))
                 self.update_ui()
             else:
                 print("No servers are running")
@@ -162,7 +167,11 @@ class App(tk.Tk):
             print(f"Error occurred while retrieving server list: {e}")
 
         # Cleanup to remove no longer running servers
-        to_remove = [server for server in self.servers.keys() if self.servers[server].stop_event.is_set()]
+        to_remove = [
+            server
+            for server in self.servers.keys()
+            if self.servers[server].stop_event.is_set()
+        ]
         _ = [self.servers.pop(server, None) for server in to_remove]
 
     def on_server_change(self, *args):
