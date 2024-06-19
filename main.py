@@ -21,6 +21,11 @@ class App(tk.Tk):
 
         self.session = requests.Session()
 
+        # Initialize servers dictionary
+        self.servers = {}
+        # The previous line put into the output
+        self.prev_line = {}
+
         print(f"Loaded settings from config. API URL: {self.url}")
 
         self.title("MCConsolePy")
@@ -41,6 +46,15 @@ class App(tk.Tk):
             background=[("active", "white")],
             foreground=[("active", "black")],
         )
+
+        # Create menu bar
+        self.menu_bar = tk.Menu(self)
+        self.configure(menu=self.menu_bar)
+
+        # File menu
+        self.file_menu = tk.Menu(self.menu_bar, tearoff=0)
+        self.file_menu.add_command(label="Refresh Servers", command=self.refresh_servers)
+        self.menu_bar.add_cascade(label="File", menu=self.file_menu)
 
         # Create main frame
         self.main_frame = ttk.Frame(self)
@@ -78,6 +92,9 @@ class App(tk.Tk):
 
         # Server selection dropdown
         self.server_var = tk.StringVar()
+        # Server selection dropdown
+        self.server_var = tk.StringVar()
+        self.server_var.trace("w", self.on_server_change)
         self.server_dropdown = ttk.OptionMenu(
             self.side_panel_frame,
             self.server_var,
@@ -85,7 +102,6 @@ class App(tk.Tk):
             style="Custom.TMenubutton",
         )
         self.server_dropdown.pack(side=tk.TOP, fill=tk.X, padx=10, pady=10)
-        self.server_dropdown.bind("<<ComboboxSelected>>", self.on_server_change)
 
         # Bottom frame
         self.bottom_frame = ttk.Frame(self)
@@ -115,11 +131,6 @@ class App(tk.Tk):
                 "API key file not found. Please create api_key.txt with your API key in it."
             )
 
-        # Initialize servers dictionary
-        self.servers = {}
-        # The previous line put into the output
-        self.prev_line = None
-
         # Get the list of running servers
         self.get_server_list()
 
@@ -140,25 +151,32 @@ class App(tk.Tk):
                         label=server_name,
                         command=lambda value=server_name: self.server_var.set(value),
                     )
+                # Select the first server by default
                 self.server_var.set(
                     next(iter(self.servers.keys()))
-                )  # Select the first server by default
+                )
                 self.update_ui()
             else:
                 print("No servers are running")
         except requests.exceptions.RequestException as e:
             print(f"Error occurred while retrieving server list: {e}")
 
-    def on_server_change(self, event):
+        # Cleanup to remove no longer running servers
+        to_remove = [server for server in self.servers.keys() if self.servers[server].stop_event.is_set()]
+        _ = [self.servers.pop(server, None) for server in to_remove]
+
+    def on_server_change(self, *args):
         self.clear_output()
         self.clear_player_list()
         self.update_ui()
+        # Scroll to the end
+        self.text_display.see(tk.END)
 
     def clear_output(self):
         self.text_display.configure(state="normal")
         self.text_display.delete("1.0", tk.END)
         self.text_display.configure(state="disabled")
-        self.prev_line = None
+        self.prev_line = {}
 
     def clear_player_list(self):
         self.side_panel.delete(0, tk.END)
@@ -170,29 +188,29 @@ class App(tk.Tk):
     def update_ui(self):
         selected_server = self.server_var.get()
         if selected_server:
-            server = self.servers[selected_server]
-            output_lines = server.get_output()
-            self.text_display.configure(state="normal")  # Enable editing
+            server = self.servers.get(selected_server, None)
+            if server is not None:
+                output_lines = server.get_output()
+                self.text_display.configure(state="normal")  # Enable editing
 
-            for line_data in output_lines:
-                line = line_data["line"]
-                timestamp = line_data["timestamp"]
-                if self.prev_line is None or (
-                    line != self.prev_line["line"]
-                    and timestamp >= self.prev_line["timestamp"]
-                ):
-                    self.text_display.insert(tk.END, line + "\n")
-                    self.prev_line = line_data
+                for line_data in output_lines:
+                    line = line_data["line"]
+                    timestamp = line_data["timestamp"]
+                    if self.prev_line.get("line") is None or (
+                        line != self.prev_line["line"]
+                        and timestamp > self.prev_line["timestamp"]
+                    ):
+                        self.text_display.insert(tk.END, line + "\n")
+                        self.prev_line = line_data
 
-            self.text_display.configure(state="disabled")  # Disable editing
-            self.text_display.see(tk.END)  # Scroll to the end
+                self.text_display.configure(state="disabled")  # Disable editing
 
-            player_list = server.get_player_list()
-            self.side_panel.delete(0, tk.END)  # Clear the existing player list
-            for player_name in player_list:
-                self.side_panel.insert(tk.END, player_name)
+                player_list = server.get_player_list()
+                self.side_panel.delete(0, tk.END)  # Clear the existing player list
+                for player_name in player_list:
+                    self.side_panel.insert(tk.END, player_name)
 
-        self.after(1000, self.update_ui)  # Schedule the next update after 1 second
+        self.after(100, self.update_ui)  # Schedule the next update after 100ms
 
     def submit_text(self, event=None):
         text = self.entry.get()
@@ -217,6 +235,9 @@ class App(tk.Tk):
                 print("Input sent successfully")
             except requests.exceptions.RequestException as e:
                 print(f"Error occurred while sending input: {e}")
+
+    def refresh_servers(self):
+        self.get_server_list()
 
     def on_closing(self):
         for server in self.servers.values():

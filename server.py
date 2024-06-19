@@ -26,7 +26,7 @@ class Server:
                 url, headers=headers, params=params, stream=True
             ) as response:
                 buffer = ""
-                if self.stop_event.is_set():
+                if self.stop_event.is_set() or response.status_code == 404:
                     return
                 for chunk in response.iter_content(chunk_size=1):
                     if self.stop_event.is_set():
@@ -47,6 +47,8 @@ class Server:
         except requests.exceptions.RequestException as e:
             if not self.stop_event.is_set():
                 print(f"Error occurred during streaming: {e}")
+                self.stop_event.set()
+                self.app.refresh_servers()
 
     def update_player_list(self):
         url = f"{self.app.url}/players"
