@@ -54,9 +54,12 @@ class App(tk.Tk):
         # File menu
         self.file_menu = tk.Menu(self.menu_bar, tearoff=0)
         self.file_menu.add_command(
-            label="Refresh Servers", command=self.refresh_servers
+            label="Exit", command=self.on_closing
         )
         self.menu_bar.add_cascade(label="File", menu=self.file_menu)
+
+        # Refresh servers
+        self.menu_bar.add_command(label="Refresh Servers", command=self.refresh_servers)
 
         # Create main frame
         self.main_frame = ttk.Frame(self)
@@ -190,10 +193,6 @@ class App(tk.Tk):
 
     def clear_player_list(self):
         self.side_panel.delete(0, tk.END)
-
-    def strip(self, line):
-        ret = line.replace("\r\n", "")
-        return ret
 
     def update_ui(self):
         selected_server = self.server_var.get()
