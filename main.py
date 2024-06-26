@@ -2,7 +2,7 @@ import datetime
 import json
 import os
 import tkinter as tk
-from tkinter import ttk
+from tkinter import messagebox, ttk
 
 import requests
 
@@ -53,13 +53,13 @@ class App(tk.Tk):
 
         # File menu
         self.file_menu = tk.Menu(self.menu_bar, tearoff=0)
-        self.file_menu.add_command(
-            label="Exit", command=self.on_closing
-        )
+        self.file_menu.add_command(label="Exit", command=self.on_closing)
         self.menu_bar.add_cascade(label="File", menu=self.file_menu)
 
         # Refresh servers
         self.menu_bar.add_command(label="Refresh Servers", command=self.refresh_servers)
+        # Start a server
+        self.menu_bar.add_command(label="Start a Server", command=self.start_server)
 
         # Create main frame
         self.main_frame = ttk.Frame(self)
@@ -113,14 +113,10 @@ class App(tk.Tk):
         self.bottom_frame.pack(fill=tk.X)
 
         # Text entry
-        self.entry = ttk.Entry(
-            self.bottom_frame, width=70, font=("Segoe UI", 12)
-        )
+        self.entry = ttk.Entry(self.bottom_frame, width=70, font=("Segoe UI", 12))
         self.entry.pack(side=tk.LEFT, fill=tk.X, padx=5, pady=10, expand=True)
         # Pressing enter submits textbox
-        self.entry.bind(
-            "<Return>", self.submit_text
-        )
+        self.entry.bind("<Return>", self.submit_text)
 
         # Submit button
         self.submit_button = ttk.Button(
@@ -249,6 +245,66 @@ class App(tk.Tk):
 
     def refresh_servers(self):
         self.get_server_list()
+
+    def start_server(self):
+        start_server_window = tk.Toplevel(self)
+        start_server_window.title("Start a Server")
+        start_server_window.geometry("300x175")
+        start_server_window.configure(bg="black")
+
+        # Server name label and entry
+        server_name_label = ttk.Label(start_server_window, text="Server Name:")
+        server_name_label.pack(pady=5)
+        server_name_entry = ttk.Entry(start_server_window)
+        server_name_entry.pack(pady=5)
+
+        # Server path label and entry
+        server_path_label = ttk.Label(
+            start_server_window, text="Server Path (optional):"
+        )
+        server_path_label.pack(pady=5)
+        server_path_entry = ttk.Entry(start_server_window)
+        server_path_entry.pack(pady=5)
+
+        def start_server_submit():
+            server_name = server_name_entry.get()
+            server_path = server_path_entry.get()
+
+            if server_name:
+                url = f"{self.url}/start_server"
+                headers = {"x-api-key": self.api_key} if self.api_key else None
+                params = {"server_name": server_name}
+                if server_path:
+                    params["server_path"] = server_path
+
+                try:
+                    response = requests.post(url, headers=headers, params=params)
+                    if response.status_code == 404:
+                        error_message = response.json().get("message", "Server not found")
+                        messagebox.showerror("Error", error_message)
+                    elif response.status_code == 400:
+                        error_message = response.json().get(
+                            "message", "Error starting the server"
+                        )
+                        messagebox.showerror("Error", error_message)
+                    else:
+                        response.raise_for_status()  # Raise an exception for other 4xx or 5xx status codes
+                        success_message = response.json().get(
+                            "message", "Server started successfully"
+                        )
+                        messagebox.showinfo("Success", success_message)
+                        start_server_window.destroy()
+                        self.refresh_servers()
+                except requests.exceptions.RequestException as e:
+                    print(f"Error occurred while starting the server: {e}")
+            else:
+                messagebox.showerror("Error", "Please enter a server name")
+
+        # Start Server button
+        start_server_button = ttk.Button(
+            start_server_window, text="Start Server", command=start_server_submit
+        )
+        start_server_button.pack(pady=10)
 
     def on_closing(self):
         for server in self.servers.values():
